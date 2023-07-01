@@ -16,16 +16,20 @@
 
 #include "nokia5110.h"
 
-int main(void)
-{
-    nokia_lcd_init();
-    nokia_lcd_clear();
-    nokia_lcd_write_string("IT'S WORKING!",1);
-    nokia_lcd_set_cursor(0, 10);
-    nokia_lcd_write_string("Nice!", 3);
-    nokia_lcd_render();
+int main(void) {
+    nokia_5110_init();
 
-    for (;;) {
-        _delay_ms(1000);
-    }
+    nokia_5110_write("Crazy");
+     _delay_ms(1000);
+     nokia_5110_invert();
+     _delay_ms(1000);
+
+    nokia_5110_set_xy(10, 4);
+    nokia_5110_write("Monkey");
+     _delay_ms(1000);
+     nokia_5110_noninvert();
+
+     _delay_ms(1000);
+
+    nokia_5110_clear();
 }

@@ -12,192 +12,115 @@
  */
 
 #include "nokia5110.h"
-
-#include <avr/pgmspace.h>
-#include <avr/io.h>
-#include <util/delay.h>
 #include "nokia5110_chars.h"
 
+#include <avr/io.h>
 
-static struct {
-    /* screen byte massive */
-    uint8_t screen[504];
+#ifdef __AVR_ATmega8__
+    #define SS   PB2
+    #define MOSI PB3
+    #define DC   PB1
+    #define SCK  PB5
+#endif
+#ifdef __AVR_ATmega16__
+    #define SS   PB4
+    #define MOSI PB5
+    #define DC   PB6
+    #define SCK  PB7
+#endif
 
-    /* cursor position */
-    uint8_t cursor_x;
-    uint8_t cursor_y;
+static void SPI_init_master() {
+    DDRB |= (1 << SS) |    // SS
+            (1 << MOSI) |  // SCK
+            (1 << DC) |    // DC
+            (1 << SCK);    // SCK
 
-} nokia_lcd = {
-    .cursor_x = 0,
-    .cursor_y = 0
-};
 
-/**
- * Sending data to LCD
- * @bytes: data
- * @is_data: transfer mode: 1 - data; 0 - command;
- */
-static void write(uint8_t bytes, uint8_t is_data)
-{
-	register uint8_t i;
-	/* Enable controller */
-	PORT_LCD &= ~(1 << LCD_SCE);
+    SPCR = (1 << SPE) |    // enable SPI
+           (1 << MSTR);    // SPI mater mode
 
-	/* We are sending data */
-	if (is_data)
-		PORT_LCD |= (1 << LCD_DC);
-	/* We are sending commands */
-	else
-		PORT_LCD &= ~(1 << LCD_DC);
-
-	/* Send bytes */
-	for (i = 0; i < 8; i++) {
-		/* Set data pin to byte state */
-		if ((bytes >> (7-i)) & 0x01)
-			PORT_LCD |= (1 << LCD_DIN);
-		else
-			PORT_LCD &= ~(1 << LCD_DIN);
-
-		/* Blink clock */
-		PORT_LCD |= (1 << LCD_CLK);
-		PORT_LCD &= ~(1 << LCD_CLK);
-	}
-
-	/* Disable controller */
-	PORT_LCD |= (1 << LCD_SCE);
+    PORTB &= ~(1<<SS);
 }
 
-static void write_cmd(uint8_t cmd)
-{
-	write(cmd, 0);
+static inline void write(uint8_t data) {
+    SPDR = data;
+    while(!(SPSR & (1<<SPIF)));
 }
 
-static void write_data(uint8_t data)
-{
-	write(data, 1);
+static inline void command_mode() {
+    PORTB &= ~(1<<DC);  // activate command mode
 }
 
-/*
- * Public functions
- */
-
-void nokia_lcd_init(void)
-{
-	register unsigned i;
-	/* Set pins as output */
-	DDR_LCD |= (1 << LCD_SCE);
-	DDR_LCD |= (1 << LCD_RST);
-	DDR_LCD |= (1 << LCD_DC);
-	DDR_LCD |= (1 << LCD_DIN);
-	DDR_LCD |= (1 << LCD_CLK);
-
-	/* Reset display */
-	PORT_LCD |= (1 << LCD_RST);
-	PORT_LCD |= (1 << LCD_SCE);
-	_delay_ms(10);
-	PORT_LCD &= ~(1 << LCD_RST);
-	_delay_ms(70);
-	PORT_LCD |= (1 << LCD_RST);
-
-	/*
-	 * Initialize display
-	 */
-	/* Enable controller */
-	PORT_LCD &= ~(1 << LCD_SCE);
-	/* -LCD Extended Commands mode- */
-	write_cmd(0x21);
-	/* LCD bias mode 1:48 */
-	write_cmd(0x13);
-	/* Set temperature coefficient */
-	write_cmd(0x06);
-	/* Default VOP (3.06 + 66 * 0.06 = 7V) */
-	write_cmd(0xC2);
-	/* Standard Commands mode, powered down */
-	write_cmd(0x20);
-	/* LCD in normal mode */
-	write_cmd(0x09);
-
-	/* Clear LCD RAM */
-	write_cmd(0x80);
-	write_cmd(LCD_CONTRAST);
-	for (i = 0; i < 504; i++)
-		write_data(0x00);
-
-	/* Activate LCD */
-	write_cmd(0x08);
-	write_cmd(0x0C);
+static inline void data_mode() {
+    PORTB |= (1<<DC);  // activate data mode
 }
 
-void nokia_lcd_clear(void)
-{
-	register unsigned i;
-	/* Set column and row to 0 */
-	write_cmd(0x80);
-	write_cmd(0x40);
-	/*Cursor too */
-	nokia_lcd.cursor_x = 0;
-	nokia_lcd.cursor_y = 0;
-	/* Clear everything (504 bytes = 84cols * 48 rows / 8 bits) */
-	for(i = 0;i < 504; i++)
-		nokia_lcd.screen[i] = 0x00;
+
+void nokia_5110_init(void) {
+    SPI_init_master();
+
+    command_mode();
+
+    write(0x21);  // Extended instruction set control (H)
+    write(0x13);  // LCD bias mode 1:48
+    write(0x06);  // Set temperature coefficient
+    write(0xC2);  // Default VOP (3.06 + 66 * 0.06 = 7V)
+
+    write(0x20);  // chip active, horizontal addr, normal control (~H)
+    write(0x0C);  // set normal mode
+
+    nokia_5110_clear();
+
 }
 
-void nokia_lcd_power(uint8_t on)
-{
-	write_cmd(on ? 0x20 : 0x24);
+void nokia_5110_clear(void) {
+    command_mode();
+
+    write(0x80);  // set X address to 0
+    write(0x40);  // set Y address to 0 (bank 0)
+
+    data_mode();  // activate data mode
+
+    for(unsigned i = 0;i < 504; i++) {
+        write(0x00);  // clear LCD memory
+    }
 }
 
-void nokia_lcd_set_pixel(uint8_t x, uint8_t y, uint8_t value)
-{
-	uint8_t *byte = &nokia_lcd.screen[y/8*84+x];
-	if (value)
-		*byte |= (1 << (y % 8));
-	else
-		*byte &= ~(1 << (y %8 ));
+void nokia_5110_set_xy(uint8_t x, uint8_t y) {
+    command_mode();
+
+    x = (x % 84);
+    y = (y % 6);
+
+    write(0x80 | x);
+    write(0x40 | y);
 }
 
-void nokia_lcd_write_char(char code, uint8_t scale)
-{
-	register uint8_t x, y;
-
-	for (x = 0; x < 5*scale; x++)
-		for (y = 0; y < 7*scale; y++)
-			if (pgm_read_byte(&CHARSET[code-32][x/scale]) & (1 << y/scale))
-				nokia_lcd_set_pixel(nokia_lcd.cursor_x + x, nokia_lcd.cursor_y + y, 1);
-			else
-				nokia_lcd_set_pixel(nokia_lcd.cursor_x + x, nokia_lcd.cursor_y + y, 0);
-
-	nokia_lcd.cursor_x += 5*scale + 1;
-	if (nokia_lcd.cursor_x >= 84) {
-		nokia_lcd.cursor_x = 0;
-		nokia_lcd.cursor_y += 7*scale + 1;
-	}
-	if (nokia_lcd.cursor_y >= 48) {
-		nokia_lcd.cursor_x = 0;
-		nokia_lcd.cursor_y = 0;
-	}
+//Inverts the current screen
+void nokia_5110_invert() {
+    command_mode();
+    write(0x0D);
 }
 
-void nokia_lcd_write_string(const char *str, uint8_t scale)
-{
-	while(*str)
-		nokia_lcd_write_char(*str++, scale);
+//Noninverts the screen
+void nokia_5110_noninvert() { 
+    command_mode();
+    write(0x0C);
 }
 
-void nokia_lcd_set_cursor(uint8_t x, uint8_t y)
-{
-	nokia_lcd.cursor_x = x;
-	nokia_lcd.cursor_y = y;
-}
+//Send ASCII data to the display
+void nokia_5110_write(char* data) {
+    data_mode();  // activate data mode
 
-void nokia_lcd_render(void)
-{
-	register unsigned i;
-	/* Set column and row to 0 */
-	write_cmd(0x80);
-	write_cmd(0x40);
-
-	/* Write screen to display */
-	for (i = 0; i < 504; i++)
-		write_data(nokia_lcd.screen[i]);
+    while (*data) {
+        char c = *data++;
+        for (int j=0; j<5; j++) {
+            #if __PGMSPACE_H_
+                write(pgm_read_byte(&(CHARSET[c - 0x20][j])));
+            #else
+                write(CHARSET[c - 0x20][j]);
+            #endif
+        }
+        write(0x00);
+    }
 }
