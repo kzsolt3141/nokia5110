@@ -15,15 +15,13 @@
 #define __NOKIA_5110_H__
 
 #include <stdint.h>
+#include <stddef.h>
 
-/*
- * Must be called once before any other function, initializes display
- */
-void nokia_5110_init(void);
+typedef void (*spi_init_cb_t)();
+typedef uint8_t (*spi_write_cb_t)(uint8_t data);
 
-/*
- * Clear screen
- */
+uint8_t nokia_5110_init(spi_init_cb_t spi_init_cb, spi_write_cb_t spi_write_cb);
+
 void nokia_5110_clear(void);
 
 void nokia_5110_set_xy(uint8_t x, uint8_t y);

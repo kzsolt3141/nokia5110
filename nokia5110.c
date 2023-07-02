@@ -17,35 +17,13 @@
 #include <avr/io.h>
 
 #ifdef __AVR_ATmega8__
-    #define SS   PB2
-    #define MOSI PB3
     #define DC   PB1
-    #define SCK  PB5
 #endif
 #ifdef __AVR_ATmega16__
-    #define SS   PB4
-    #define MOSI PB5
     #define DC   PB6
-    #define SCK  PB7
 #endif
 
-static void SPI_init_master() {
-    DDRB |= (1 << SS) |    // SS
-            (1 << MOSI) |  // SCK
-            (1 << DC) |    // DC
-            (1 << SCK);    // SCK
-
-
-    SPCR = (1 << SPE) |    // enable SPI
-           (1 << MSTR);    // SPI mater mode
-
-    PORTB &= ~(1<<SS);
-}
-
-static inline void write(uint8_t data) {
-    SPDR = data;
-    while(!(SPSR & (1<<SPIF)));
-}
+static spi_write_cb_t write = NULL;
 
 static inline void command_mode() {
     PORTB &= ~(1<<DC);  // activate command mode
@@ -55,9 +33,13 @@ static inline void data_mode() {
     PORTB |= (1<<DC);  // activate data mode
 }
 
+uint8_t nokia_5110_init(spi_init_cb_t spi_init_cb, spi_write_cb_t spi_write_cb) {
+    if (NULL == spi_init_cb || NULL == spi_write_cb) return 1;
 
-void nokia_5110_init(void) {
-    SPI_init_master();
+    spi_init_cb();
+    write = spi_write_cb;
+
+    DDRB |= (1 << DC);
 
     command_mode();
 
@@ -71,6 +53,7 @@ void nokia_5110_init(void) {
 
     nokia_5110_clear();
 
+    return 0;
 }
 
 void nokia_5110_clear(void) {

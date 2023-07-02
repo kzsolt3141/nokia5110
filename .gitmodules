@@ -1,0 +1,3 @@
+[submodule "spi"]
+	path = spi
+	url = ../spi/
