@@ -15,14 +15,9 @@
 #include <util/delay.h>
 
 #include "nokia5110.h"
-#include "spi.h"
-
-static inline void init_spi_master() {
-    SPI_init_master(SPI_PS_4);
-}
 
 int main(void) {
-    if (nokia_5110_init(init_spi_master, SPI_RW_byte)) return 1;
+    nokia_5110_init();
 
     nokia_5110_write("Crazy");
      _delay_ms(1000);

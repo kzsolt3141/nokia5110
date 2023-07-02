@@ -16,14 +16,15 @@
 
 #include <avr/io.h>
 
-#ifdef __AVR_ATmega8__
-    #define DC   PB1
-#endif
-#ifdef __AVR_ATmega16__
-    #define DC   PB6
-#endif
+#define SS   PB0
+#define MOSI PB3
+#define DC   PB1
+#define SCK  PB5
 
-static spi_write_cb_t write = NULL;
+static inline void write(uint8_t data) {
+    SPDR = data;
+    while(!(SPSR & (1<<SPIF)));
+}
 
 static inline void command_mode() {
     PORTB &= ~(1<<DC);  // activate command mode
@@ -33,13 +34,14 @@ static inline void data_mode() {
     PORTB |= (1<<DC);  // activate data mode
 }
 
-uint8_t nokia_5110_init(spi_init_cb_t spi_init_cb, spi_write_cb_t spi_write_cb) {
-    if (NULL == spi_init_cb || NULL == spi_write_cb) return 1;
+uint8_t nokia_5110_init() {
+    DDRB = (1 << SS) |    // SS
+           (1 << MOSI) |  // SCK
+           (1 << DC) |    // DC
+           (1 << SCK);    // SCK
 
-    spi_init_cb();
-    write = spi_write_cb;
-
-    DDRB |= (1 << DC);
+    SPCR = (1 << SPE) |    // enable SPI
+           (1 << MSTR);    // SPI mater mode
 
     command_mode();
 

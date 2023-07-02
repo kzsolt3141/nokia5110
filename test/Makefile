@@ -3,11 +3,11 @@ F_CPU=8000000
 CC=avr-gcc
 OBJCOPY=avr-objcopy
 MEMCHECK=avr-size
-IFLAGS=-I../ -I ../spi
+IFLAGS=-I../
 
 CFLAGS=-std=c11 -Wall -g -O3 -mmcu=${MCU} -DF_CPU=${F_CPU} ${IFLAGS}
 TARGET=main
-SRCS=main.c ../nokia5110.c ../spi/spi.c
+SRCS=main.c ../nokia5110.c
 
 all:
 	${CC} ${CFLAGS} -o ${TARGET}.bin ${SRCS}
@@ -15,4 +15,4 @@ all:
 	${MEMCHECK} -C --mcu=${MCU} ${TARGET}.bin
 
 clean:
-	rm -f *.bin *.hex
+	rm -f *.bin *.hexgit sub

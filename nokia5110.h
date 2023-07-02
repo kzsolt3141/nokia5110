@@ -17,10 +17,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-typedef void (*spi_init_cb_t)();
-typedef uint8_t (*spi_write_cb_t)(uint8_t data);
-
-uint8_t nokia_5110_init(spi_init_cb_t spi_init_cb, spi_write_cb_t spi_write_cb);
+uint8_t nokia_5110_init();
 
 void nokia_5110_clear(void);
 
