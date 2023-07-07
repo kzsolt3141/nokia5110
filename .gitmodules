@@ -1,0 +1,6 @@
+[submodule "uart"]
+	path = uart
+	url = ../uart
+[submodule "spi"]
+	path = spi
+	url = ../spi

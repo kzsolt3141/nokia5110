@@ -1,47 +1,44 @@
-/* Nokia 5110 LCD AVR Library
- *
- * Copyright (C) 2015 Sergey Denisov.
- * Written by Sergey Denisov aka LittleBuster (DenisovS21@gmail.com)
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public Licence
- * as published by the Free Software Foundation; either version 3
- * of the Licence, or (at your option) any later version.
- *
- * Original library written by SkewPL, http://skew.tk
- */
-
 #include "nokia5110.h"
 #include "nokia5110_chars.h"
 
 #include <avr/io.h>
+#include <avr/interrupt.h>
 
 #define SS   PB0
 #define MOSI PB3
+#define MISO PB4
 #define DC   PB1
 #define SCK  PB5
+// #define MASTER_SS PB2
+#define DISP_RTS PD7
+#define INT0_PIN PD2
 
+static SPI_isr_cb  SPI_cb_     = NULL;
+static void       *SPI_cb_ctx_ = NULL;
+
+static uint8_t     invert = 0x0C;  // keep in mind the current invert status
+
+// send data in master mode to the slave, wait until the transaction is ready.
 static inline void write(uint8_t data) {
+    if ((SPCR & (1 << MSTR)) == 0) return;  // don't send display data when MCU is in slave mode
+
     SPDR = data;
     while(!(SPSR & (1<<SPIF)));
 }
 
+// activate display command mode by pulling DC pin down
 static inline void command_mode() {
-    PORTB &= ~(1<<DC);  // activate command mode
+    PORTB &= ~(1<<DC);
 }
 
+// activate display data mode by pulling DC pin down
 static inline void data_mode() {
     PORTB |= (1<<DC);  // activate data mode
 }
 
-uint8_t nokia_5110_init() {
-    DDRB = (1 << SS) |    // SS
-           (1 << MOSI) |  // SCK
-           (1 << DC) |    // DC
-           (1 << SCK);    // SCK
-
-    SPCR = (1 << SPE) |    // enable SPI
-           (1 << MSTR);    // SPI mater mode
+static void display_init() {
+    PORTD &= ~(1 << DISP_RTS);  // display HW reset (will not clear the buffer)
+    PORTD |= (1 << DISP_RTS);  // disable display HW reset
 
     command_mode();
 
@@ -52,13 +49,45 @@ uint8_t nokia_5110_init() {
 
     write(0x20);  // chip active, horizontal addr, normal control (~H)
     write(0x0C);  // set normal mode
+}
 
+//////////////////////////////////////////////////////////
+
+uint8_t nokia_5110_init(SPI_isr_cb SPI_cb, void* SPI_cb_ctx) {
+    if (NULL == SPI_cb || NULL == SPI_cb_ctx) return 1;
+
+    cli();
+
+    DDRB = (1 << SS) |
+           (1 << MOSI) |
+           (1 << MISO) |  // to be able to send data when it is in slave mode
+           (1 << DC) |
+           (1 << SCK);
+
+    DDRD |= (1 << DISP_RTS);  // conn
+    DDRD &= ~(1 << INT0_PIN);  // input for INT0
+
+    MCUCR |= (1 << ISC00) |
+             (1 << ISC01);  // general interrupt ISR0 on rising edge
+
+    GICR |= (1 << INT0);  // enable ISR0
+
+    SPCR = (1 << SPE) |    // enable SPI
+           (1 << MSTR);    // SPI mater mode
+
+    SPI_cb_ = SPI_cb;
+    SPI_cb_ctx_ = SPI_cb_ctx;
+    SPCR |= (1 << SPIE);  // SPI interrupt enable
+
+    display_init();
     nokia_5110_clear();
+
+    sei();
 
     return 0;
 }
 
-void nokia_5110_clear(void) {
+void nokia_5110_clear() {
     command_mode();
 
     write(0x80);  // set X address to 0
@@ -83,14 +112,9 @@ void nokia_5110_set_xy(uint8_t x, uint8_t y) {
 
 //Inverts the current screen
 void nokia_5110_invert() {
+    invert ^= 0x01;
     command_mode();
-    write(0x0D);
-}
-
-//Noninverts the screen
-void nokia_5110_noninvert() { 
-    command_mode();
-    write(0x0C);
+    write(invert);
 }
 
 //Send ASCII data to the display
@@ -108,4 +132,17 @@ void nokia_5110_write(char* data) {
         }
         write(0x00);
     }
+}
+
+//////////////////////////////////////////////////////////
+
+// SPI interrupt will be defined in user application
+ISR(SPI_STC_vect) {
+    SPI_cb_(SPI_cb_ctx_);
+}
+
+// INT0 external interrupt to bring back SPI to master mode
+ISR(INT0_vect) {
+    SPCR |= (1 << MSTR);    // put back SPI in mater mode
+    display_init();
 }

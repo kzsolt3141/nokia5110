@@ -1,13 +1,13 @@
-MCU=atmega8
-F_CPU=8000000
+MCU=atmega16
+F_CPU=12000000
 CC=avr-gcc
 OBJCOPY=avr-objcopy
 MEMCHECK=avr-size
-IFLAGS=-I../ -I../uart/
+IFLAGS=-I../uart/ -I../spi/ -I../
 
 CFLAGS=-std=c11 -Wall -g -O3 -mmcu=${MCU} -DF_CPU=${F_CPU} ${IFLAGS}
 TARGET=main
-SRCS=main.c ../nokia5110.c ../uart/uart.c
+SRCS=main.c ../uart/uart.c ../spi/spi.c
 
 all:
 	${CC} ${CFLAGS} -o ${TARGET}.bin ${SRCS}
@@ -15,4 +15,4 @@ all:
 	${MEMCHECK} -C --mcu=${MCU} ${TARGET}.bin
 
 clean:
-	rm -f *.bin *.hexgit sub
+	rm -f *.bin *.hex
