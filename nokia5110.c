@@ -22,8 +22,10 @@ static uint8_t     invert = 0x0C;  // keep in mind the current invert status
 static inline void write(uint8_t data) {
     if ((SPCR & (1 << MSTR)) == 0) return;  // don't send display data when MCU is in slave mode
 
+    PORTB &= ~(1 << SS);  // slave select enable
     SPDR = data;
     while(!(SPSR & (1<<SPIF)));
+    PORTB |= (1 << SS);  // slave select disable
 }
 
 // activate display command mode by pulling DC pin down
@@ -63,6 +65,8 @@ uint8_t nokia_5110_init(SPI_isr_cb SPI_cb, void* SPI_cb_ctx) {
            (1 << MISO) |  // to be able to send data when it is in slave mode
            (1 << DC) |
            (1 << SCK);
+
+    PORTB |= (1 << SS);  // slave select disable
 
     DDRD |= (1 << DISP_RTS);  // conn
     DDRD &= ~(1 << INT0_PIN);  // input for INT0
