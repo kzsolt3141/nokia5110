@@ -5,24 +5,9 @@
 #include <stddef.h>
 
 /**
- * SPI interrupt callback type
- * @param[inout] ctx user data for interrupt callback
- * When SPI ISR occurs SPI_isr_cb will be called with ctx as parameter
+ * Configure SPI as master to communicate with Nokia 5110 display
  */
-typedef void (*SPI_isr_cb)(void* ctx);
-
-/**
- * Configure SPI as master but with main SS pin set as input. Multi-master mode compatible.
- * SS pint to the slave is PB0.
- * Initializes display.
- * @param[in] SPI_cb SPI interrupt callback - will be used when an other master requires data
- * @param[in] SPI_cb_ctx SPI interrupt callback context
- * When ISR occurs SPI_isr_cb will be called with ctx as parameter
- * 
- * @return 0 - OK
- *         1 - failed
- */
-uint8_t nokia_5110_init(SPI_isr_cb SPI_cb, void* SPI_cb_ctx);
+uint8_t nokia_5110_init();
 
 /**
  * Clear the display and the display memory. This function requires a working SPI connection.
